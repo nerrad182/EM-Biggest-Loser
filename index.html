@@ -201,7 +201,7 @@
   <div class="card">
     <div class="card-header">
       <h3>Leaderboard</h3>
-      <button type="button" class="secondary small" id="suspenseToggle" onclick="toggleSuspense()">🙈 Hide Numbers</button>
+      <button type="button" class="secondary small" id="suspenseToggle" onclick="toggleSuspense()">Hide</button>
     </div>
     <div class="status" id="statusMsg"></div>
     <table id="leaderboard">
@@ -221,11 +221,11 @@
   </div>
 
   <div class="card">
-    <button class="edit-toggle standalone" id="adminToggle" type="button">⚙️ Admin: Register / Log Weigh-In</button>
+    <button class="edit-toggle standalone" id="adminToggle" type="button">Registration</button>
     <div class="settings-form" id="adminContent">
-      <h3>Register Participant</h3>
+      <h3>Start Weigh-In</h3>
       <div class="subhead">Step 1 — record their starting weight when they join. (Admin only)</div>
-      <label for="regName">Participant Name</label>
+      <label for="regName">Participant</label>
       <input type="text" id="regName" placeholder="e.g., John">
 
       <label for="regStart">Starting Weight (kg)</label>
@@ -248,7 +248,7 @@
   </div>
 
   <div class="card">
-    <button class="edit-toggle standalone" id="tncToggle" type="button">📜 View Terms &amp; Conditions</button>
+    <button class="edit-toggle standalone" id="tncToggle" type="button">Terms &amp; Conditions</button>
     <div class="settings-form" id="tncContent">
       <ol class="tnc-list">
         <li><strong>Eligibility</strong> — open to all Eternity Mode Office colleagues.</li>
@@ -263,7 +263,7 @@
     </div>
   </div>
 
-  <div class="footer-note">Let's get healthier together 💪🔥</div>
+  <div class="footer-note">"Sini ko, mari kita hantam ini workout sampai sumandak/anak muda pun teringat-ingat! Sihat total terus kita! 💪🔥" - ChatGPT Cakap Sabahan</div>
 </div>
 
 <script>
@@ -430,12 +430,12 @@
 
   function updateSuspenseButton(){
     const btn = document.getElementById('suspenseToggle');
-    btn.textContent = suspenseMode ? '👀 Reveal Numbers' : '🙈 Hide Numbers';
+    btn.textContent = suspenseMode ? 'Unhide' : 'Hide';
   }
 
   async function toggleSuspense(){
     const promptText = suspenseMode
-      ? 'Enter organizer PIN to reveal numbers:'
+      ? 'Enter organizer PIN to unhide numbers:'
       : 'Enter organizer PIN to hide numbers:';
     const ok = await requirePinAlways(promptText);
     if(!ok) return;
