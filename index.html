@@ -557,14 +557,16 @@
       const percentClass = p.percent >= 0 ? 'positive' : 'negative';
       const percentCell = suspenseMode ? '<span class="hidden-cell">🔒</span>' : `<span class="${percentClass}">${p.percent.toFixed(2)}%</span>`;
       // While suspense mode is on, also hide the identity of whoever is currently #1.
+      const finalCell = suspenseMode ? '<span class="hidden-cell">🔒</span>' : `${p.current} kg`;        // ← NEW: mask Final for everyone
       const nameCell = (suspenseMode && index === 0) ? '<span class="hidden-cell">🔒 Hidden</span>' : escapeHtml(p.name);
+      const rankCell = (suspenseMode && index === 0) ? '<span class="hidden-cell">🔒</span>' : medal(index);  // ← NEW: mask the #1 medal
       tr.innerHTML = `
-        <td class="rank">${medal(index)}</td>
+        <td class="rank">${rankCell}</td>
         <td>${nameCell}</td>
         <td>${p.start} kg</td>
-        <td>${p.current} kg</td>
+        <td>${finalCell}</td>
         <td>${percentCell}</td>
-        <td><button class="delete-btn" data-name="${escapeHtml(p.name)}">Drop</button></td>
+        <td><button class="delete-btn" data-name="${escapeHtml(p.name)}">X</button></td>
       `;
       tbody.appendChild(tr);
     });
@@ -577,7 +579,7 @@
         <td>${p.start} kg</td>
         <td class="pending-label">—</td>
         <td class="pending-label">Awaiting weigh-in</td>
-        <td><button class="delete-btn" data-name="${escapeHtml(p.name)}">Drop</button></td>
+        <td><button class="delete-btn" data-name="${escapeHtml(p.name)}">X</button></td>
       `;
       tbody.appendChild(tr);
     });
