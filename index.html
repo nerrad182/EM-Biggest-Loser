@@ -66,6 +66,7 @@
     margin-top: 14px; cursor: pointer; text-decoration: underline;
     background:none; border:none; width:100%; font-family: inherit;
   }
+  .edit-toggle.standalone{ margin-top: 0; font-size: 13px; }
 
   .settings-form{ display:none; margin-top: 14px; border-top: 1px dashed var(--line); padding-top: 14px; }
   .settings-form.open{ display:block; }
@@ -173,14 +174,6 @@
     </div>
 
     <div class="countdown" id="countdownText"></div>
-
-    <div class="settings-form" id="settingsForm">
-      <label for="subjectInput">Challenge Name</label>
-      <input type="text" id="subjectInput" placeholder="e.g., Biggest Loser Challenge 2026">
-
-      <button type="button" onclick="saveSettings()">Save Name</button>
-      <button type="button" class="secondary" onclick="changePin()">🔒 Change organizer PIN</button>
-    </div>
   </div>
 
   <div class="card">
@@ -206,30 +199,6 @@
   </div>
 
   <div class="card">
-    <h3>Register Participant</h3>
-    <div class="subhead">Step 1 — record their starting weight when they join. (Admin only)</div>
-    <label for="regName">Participant Name</label>
-    <input type="text" id="regName" placeholder="e.g., John">
-
-    <label for="regStart">Starting Weight (kg)</label>
-    <input type="number" id="regStart" placeholder="0.0" step="0.1">
-
-    <button onclick="registerParticipant()">Register</button>
-  </div>
-
-  <div class="card">
-    <h3>Final Weigh-In</h3>
-    <div class="subhead">Step 2 — log this once, at the end of the challenge. (Admin only)</div>
-    <label for="finalSelect">Participant</label>
-    <select id="finalSelect"></select>
-
-    <label for="finalWeight">Final Weight (kg)</label>
-    <input type="number" id="finalWeight" placeholder="0.0" step="0.1">
-
-    <button onclick="logFinalWeight()">Log Final Weigh-In</button>
-  </div>
-
-  <div class="card">
     <div class="card-header">
       <h3>Leaderboard</h3>
       <button type="button" class="secondary small" id="suspenseToggle" onclick="toggleSuspense()">🙈 Hide Numbers</button>
@@ -249,11 +218,37 @@
       <tbody id="tableBody">
       </tbody>
     </table>
-    <button type="button" class="secondary" onclick="exportCSV()">⬇️ Export CSV</button>
   </div>
 
   <div class="card">
-    <button class="edit-toggle" id="tncToggle" type="button">📜 View Terms &amp; Conditions</button>
+    <button class="edit-toggle standalone" id="adminToggle" type="button">⚙️ Admin: Register / Log Weigh-In</button>
+    <div class="settings-form" id="adminContent">
+      <h3>Register Participant</h3>
+      <div class="subhead">Step 1 — record their starting weight when they join. (Admin only)</div>
+      <label for="regName">Participant Name</label>
+      <input type="text" id="regName" placeholder="e.g., John">
+
+      <label for="regStart">Starting Weight (kg)</label>
+      <input type="number" id="regStart" placeholder="0.0" step="0.1">
+
+      <button onclick="registerParticipant()">Register</button>
+
+      <h3 style="margin-top:22px;">Final Weigh-In</h3>
+      <div class="subhead">Step 2 — log this once, at the end of the challenge. (Admin only)</div>
+      <label for="finalSelect">Participant</label>
+      <select id="finalSelect"></select>
+
+      <label for="finalWeight">Final Weight (kg)</label>
+      <input type="number" id="finalWeight" placeholder="0.0" step="0.1">
+
+      <button onclick="logFinalWeight()">Log Final Weigh-In</button>
+
+      <button type="button" class="secondary" onclick="changePin()">🔒 Change organizer PIN</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <button class="edit-toggle standalone" id="tncToggle" type="button">📜 View Terms &amp; Conditions</button>
     <div class="settings-form" id="tncContent">
       <ol class="tnc-list">
         <li><strong>Eligibility</strong> — open to all Eternity Mode Office colleagues.</li>
@@ -274,23 +269,11 @@
 <script>
   /* =====================================================================
      STORAGE BACKEND — Firebase Realtime Database
-     This app was originally built using Claude's built-in window.storage
-     API, which only works inside Claude.ai. To host this on GitHub Pages
-     (or any static host), it needs a real backend, so this shim talks to
-     a free Firebase Realtime Database instead using plain fetch() calls.
-
-     SETUP REQUIRED — replace the placeholder below with your own Firebase
-     Realtime Database URL. See the setup instructions provided alongside
-     this file for how to create one (takes about 5 minutes, free, no
-     credit card required).
   ===================================================================== */
   const FIREBASE_DB_URL = 'https://em-biggest-loser-default-rtdb.asia-southeast1.firebasedatabase.app';
 
   const storage = {
     async get(key){
-      if(FIREBASE_DB_URL.includes('YOUR-PROJECT-ID')){
-        throw new Error('Firebase not configured yet — set FIREBASE_DB_URL at the top of the script.');
-      }
       const res = await fetch(`${FIREBASE_DB_URL}/${encodeURIComponent(key)}.json`);
       if(!res.ok) throw new Error(`Storage read failed (${res.status})`);
       const value = await res.json();
@@ -298,9 +281,6 @@
       return { key, value, shared: true };
     },
     async set(key, value){
-      if(FIREBASE_DB_URL.includes('YOUR-PROJECT-ID')){
-        throw new Error('Firebase not configured yet — set FIREBASE_DB_URL at the top of the script.');
-      }
       const res = await fetch(`${FIREBASE_DB_URL}/${encodeURIComponent(key)}.json`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -314,7 +294,6 @@
   let participants = [];
   let suspenseMode = false;
   let sessionUnlocked = false;
-  const defaultSettings = { subject: "🏆 Biggest Loser Challenge 2026" };
 
   // Fixed challenge dates
   const CHALLENGE_START = '2026-07-31';
@@ -365,54 +344,20 @@
     el.textContent = text;
   }
 
-  /* ---------- Settings (challenge name only) ---------- */
-
-  async function loadSettings(){
-    try{
-      const r = await storage.get('challenge-settings');
-      const s = r ? JSON.parse(r.value) : defaultSettings;
-      applySettings(s);
-    }catch(e){
-      applySettings(defaultSettings);
-    }
-  }
-
-  function applySettings(s){
-    document.getElementById('subjectDisplay').textContent = s.subject;
-    document.getElementById('subjectInput').value = s.subject;
-  }
-
-  async function saveSettings(){
-    const ok = await requireOrganizerPin();
-    if(!ok) return;
-
-    const s = { subject: document.getElementById('subjectInput').value.trim() || defaultSettings.subject };
-    applySettings(s);
-    try{
-      const result = await storage.set('challenge-settings', JSON.stringify(s));
-      if(!result){ setStatus('Could not save — try again.'); return; }
-      setStatus('Challenge name saved ✓');
-    }catch(e){
-      setStatus('Could not save — try again.');
-    }
-    document.getElementById('settingsForm').classList.remove('open');
-  }
-
-  document.getElementById('editToggle').addEventListener('click', () => {
-    document.getElementById('settingsForm').classList.toggle('open');
-  });
-
   document.getElementById('tncToggle').addEventListener('click', () => {
     document.getElementById('tncContent').classList.toggle('open');
   });
 
-  /* ---------- Organizer PIN (admin gate for every edit) ---------- */
+  document.getElementById('adminToggle').addEventListener('click', () => {
+    document.getElementById('adminContent').classList.toggle('open');
+  });
+
+  /* ---------- Organizer PIN ---------- */
 
   async function getPin(){
     try{
       const r = await storage.get('organizer-pin');
       if(r) return r.value;
-      // No PIN saved yet — seed it with the default so it's consistent from here on.
       await setPin(DEFAULT_PIN);
       return DEFAULT_PIN;
     }catch(e){
@@ -434,6 +379,7 @@
     setStatus('Admin session locked.');
   }
 
+  // Used for register / log weigh-in / delete / settings — PIN once per session is enough.
   async function requireOrganizerPin(){
     if(sessionUnlocked) return true;
 
@@ -443,6 +389,15 @@
     if(attempt !== existing){ alert('Incorrect PIN.'); return false; }
     sessionUnlocked = true;
     updateLockIndicator();
+    return true;
+  }
+
+  // Used ONLY for the suspense hide/reveal toggle — always asks, never uses the cached session unlock.
+  async function requirePinAlways(promptText){
+    const existing = await getPin();
+    const attempt = prompt(promptText);
+    if(attempt === null) return false;
+    if(attempt !== existing){ alert('Incorrect PIN.'); return false; }
     return true;
   }
 
@@ -461,7 +416,7 @@
     alert('PIN updated.');
   }
 
-  /* ---------- Suspense mode (hide % / weights) ---------- */
+  /* ---------- Suspense mode (hide % + #1's identity) ---------- */
 
   async function loadSuspenseMode(){
     try{
@@ -479,8 +434,12 @@
   }
 
   async function toggleSuspense(){
-    const ok = await requireOrganizerPin();
+    const promptText = suspenseMode
+      ? 'Enter organizer PIN to reveal numbers:'
+      : 'Enter organizer PIN to hide numbers:';
+    const ok = await requirePinAlways(promptText);
     if(!ok) return;
+
     suspenseMode = !suspenseMode;
     try{ await storage.set('suspense-mode', JSON.stringify(suspenseMode)); }catch(e){ /* ignore */ }
     updateSuspenseButton();
@@ -597,9 +556,11 @@
       const tr = document.createElement('tr');
       const percentClass = p.percent >= 0 ? 'positive' : 'negative';
       const percentCell = suspenseMode ? '<span class="hidden-cell">🔒</span>' : `<span class="${percentClass}">${p.percent.toFixed(2)}%</span>`;
+      // While suspense mode is on, also hide the identity of whoever is currently #1.
+      const nameCell = (suspenseMode && index === 0) ? '<span class="hidden-cell">🔒 Hidden</span>' : escapeHtml(p.name);
       tr.innerHTML = `
         <td class="rank">${medal(index)}</td>
-        <td>${escapeHtml(p.name)}</td>
+        <td>${nameCell}</td>
         <td>${p.start} kg</td>
         <td>${p.current} kg</td>
         <td>${percentCell}</td>
@@ -686,34 +647,6 @@
     document.getElementById('statPrizePool').textContent = `RM${pool.toFixed(0)}`;
   }
 
-  /* ---------- CSV export ---------- */
-
-  function exportCSV(){
-    if(participants.length === 0){ alert('No participants to export yet.'); return; }
-    const rows = [['Rank', 'Name', 'Starting Weight (kg)', 'Final Weight (kg)', '% Lost', 'Status']];
-
-    const finished = participants.filter(isFinished).sort((a, b) => b.percent - a.percent);
-    const pending = participants.filter(p => !isFinished(p));
-
-    finished.forEach((p, i) => {
-      rows.push([i + 1, p.name, p.start, p.current, p.percent.toFixed(2), 'Final']);
-    });
-    pending.forEach(p => {
-      rows.push(['', p.name, p.start, '', '', 'Pending']);
-    });
-
-    const csv = rows.map(r => r.map(field => `"${String(field).replace(/"/g, '""')}"`).join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'biggest-loser-leaderboard.csv';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }
-
   /* ---------- Milestone celebration ---------- */
 
   function checkMilestone(name, oldPercent, newPercent){
@@ -757,7 +690,7 @@
   async function init(){
     renderFixedDates();
     await loadSuspenseMode();
-    await Promise.all([loadSettings(), loadParticipants()]);
+    await loadParticipants();
   }
   init();
 </script>
