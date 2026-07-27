@@ -602,17 +602,6 @@
     renderTable();
   }
 
-  // Deterministic per-name "shuffle key" — same input always gives the same
-  // output, so the hidden-mode order stays stable between renders instead of
-  // jumping around, but has zero relationship to actual standing.
-  function nameShuffleKey(name){
-    let hash = 0;
-    for(let i = 0; i < name.length; i++){
-      hash = (hash * 31 + name.charCodeAt(i)) | 0;
-    }
-    return hash;
-  }
-
   function medal(index){
     if(index === 0) return '🥇';
     if(index === 1) return '🥈';
@@ -632,18 +621,14 @@
       return;
     }
 
-    const finished = participants.filter(isFinished);
-    if(suspenseMode){
-      // Hidden mode: order must NOT reveal rank. Use a stable shuffle based on
-      // each name so the order doesn't jump around on every render, but it
-      // carries no information about who's actually winning.
-      finished.sort((a, b) => nameShuffleKey(a.name) - nameShuffleKey(b.name));
-    }else{
-      finished.sort((a, b) => b.percent - a.percent);
-    }
+    // Always sorted by highest % lost, hidden or not — only identity/weights get masked.
+    const finished = participants.filter(isFinished).sort((a, b) => b.percent - a.percent);
     const pending = participants.filter(p => !isFinished(p)).sort((a, b) => a.name.localeCompare(b.name));
 
+    const hidden = '<span class="hidden-cell">🔒</span>';
+
     function checkinCell(p){
+      if(suspenseMode) return hidden;
       if(p.checkin == null) return '<span class="pending-label">—</span>';
       return `${p.checkin} kg<span class="checkin-date">${formatDate(p.checkinDate)}</span>`;
     }
@@ -651,14 +636,16 @@
     finished.forEach((p, index) => {
       const tr = document.createElement('tr');
       const percentClass = p.percent >= 0 ? 'positive' : 'negative';
-      const percentCell = suspenseMode ? '<span class="hidden-cell">🔒</span>' : `<span class="${percentClass}">${p.percent.toFixed(2)}%</span>`;
-      const finalCell = suspenseMode ? '<span class="hidden-cell">🔒</span>' : `${p.current} kg`;
-      const nameCell = escapeHtml(p.name);
-      const rankCell = suspenseMode ? '<span class="hidden-cell">🔒</span>' : medal(index);
+      // % Lost is the ONE column that always stays visible, even in hide mode.
+      const percentCell = `<span class="${percentClass}">${p.percent.toFixed(2)}%</span>`;
+      const finalCell = suspenseMode ? hidden : `${p.current} kg`;
+      const startCell = suspenseMode ? hidden : `${p.start} kg`;
+      const nameCell = suspenseMode ? hidden : escapeHtml(p.name);
+      const rankCell = suspenseMode ? hidden : medal(index);
       tr.innerHTML = `
         <td class="rank">${rankCell}</td>
         <td>${nameCell}</td>
-        <td>${p.start} kg</td>
+        <td>${startCell}</td>
         <td>${checkinCell(p)}</td>
         <td>${finalCell}</td>
         <td>${percentCell}</td>
@@ -669,10 +656,12 @@
 
     pending.forEach(p => {
       const tr = document.createElement('tr');
+      const nameCell = suspenseMode ? hidden : escapeHtml(p.name);
+      const startCell = suspenseMode ? hidden : `${p.start} kg`;
       tr.innerHTML = `
         <td class="rank">–</td>
-        <td>${escapeHtml(p.name)}</td>
-        <td>${p.start} kg</td>
+        <td>${nameCell}</td>
+        <td>${startCell}</td>
         <td>${checkinCell(p)}</td>
         <td class="pending-label">—</td>
         <td class="pending-label">Awaiting weigh-in</td>
