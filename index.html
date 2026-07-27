@@ -644,7 +644,6 @@
     const pending = participants.filter(p => !isFinished(p)).sort((a, b) => a.name.localeCompare(b.name));
 
     function checkinCell(p){
-      if(suspenseMode) return '<span class="hidden-cell">🔒</span>';
       if(p.checkin == null) return '<span class="pending-label">—</span>';
       return `${p.checkin} kg<span class="checkin-date">${formatDate(p.checkinDate)}</span>`;
     }
