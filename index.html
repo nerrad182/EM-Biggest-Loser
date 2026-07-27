@@ -132,6 +132,7 @@
   .positive{ color: var(--green); font-weight: 700; }
   .negative{ color: var(--red); font-weight: 700; }
   .pending-label{ color: var(--muted); font-style: italic; font-size: 12.5px; }
+  .checkin-date{ display: block; font-size: 10px; color: var(--muted); margin-top: 2px; }
   .hidden-cell{ color: var(--muted); }
   .empty-row td{ text-align:center; color: var(--muted); padding: 24px 8px; font-size: 13px; }
 
@@ -242,6 +243,7 @@
           <th class="rank">#</th>
           <th>Name</th>
           <th>Start</th>
+          <th>Current</th>
           <th>Final</th>
           <th>% Lost</th>
           <th></th>
@@ -264,6 +266,19 @@
       <input type="number" id="regStart" placeholder="0.0" step="0.1">
 
       <button onclick="registerParticipant()">Register</button>
+
+      <h3 style="margin-top:22px;">Weight Check-In</h3>
+      <div class="subhead">Anytime — log a progress weigh-in. Can be updated as often as needed. (Admin only)</div>
+      <label for="checkinSelect">Participant</label>
+      <select id="checkinSelect"></select>
+
+      <label for="checkinWeight">Current Weight (kg)</label>
+      <input type="number" id="checkinWeight" placeholder="0.0" step="0.1">
+
+      <label for="checkinDate">Date Taken</label>
+      <input type="date" id="checkinDate">
+
+      <button onclick="logCheckIn()">Log Check-In</button>
 
       <h3 style="margin-top:22px;">Final Weigh-In</h3>
       <div class="subhead">Step 2 — log this once, at the end of the challenge. (Admin only)</div>
@@ -509,13 +524,37 @@
         participants[existingIndex].percent = ((start - participants[existingIndex].current) / start) * 100;
       }
     }else{
-      participants.push({ name, start, current: null, percent: null });
+      participants.push({ name, start, current: null, percent: null, checkin: null, checkinDate: null });
     }
 
     await saveAndRender();
     document.getElementById('regName').value = '';
     document.getElementById('regStart').value = '';
     setStatus(`${name} registered ✓`);
+  }
+
+  async function logCheckIn(){
+    const ok = await requireOrganizerPin();
+    if(!ok) return;
+
+    const select = document.getElementById('checkinSelect');
+    const name = select.value;
+    const weight = parseFloat(document.getElementById('checkinWeight').value);
+    const date = document.getElementById('checkinDate').value;
+
+    if(!name){ alert('Select a participant first.'); return; }
+    if(isNaN(weight) || weight <= 0){ alert('Enter a valid weight.'); return; }
+    if(!date){ alert('Pick the date the weight was taken.'); return; }
+
+    const idx = participants.findIndex(p => p.name === name);
+    if(idx === -1) return;
+
+    participants[idx].checkin = weight;
+    participants[idx].checkinDate = date;
+
+    await saveAndRender();
+    document.getElementById('checkinWeight').value = '';
+    setStatus(`${name}'s check-in logged ✓`);
   }
 
   async function logFinalWeight(){
@@ -586,8 +625,9 @@
     tbody.innerHTML = '';
 
     if(participants.length === 0){
-      tbody.innerHTML = '<tr class="empty-row"><td colspan="6">No participants yet — register someone above.</td></tr>';
-      populateFinalSelect();
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="7">No participants yet — register someone above.</td></tr>';
+      populateParticipantSelect('finalSelect', p => isFinished(p) ? `${p.name} — final logged` : `${p.name} — awaiting weigh-in`);
+      populateParticipantSelect('checkinSelect', p => p.checkin != null ? `${p.name} — last check-in ${formatDate(p.checkinDate)}` : `${p.name} — no check-in yet`);
       renderStats();
       return;
     }
@@ -603,6 +643,12 @@
     }
     const pending = participants.filter(p => !isFinished(p)).sort((a, b) => a.name.localeCompare(b.name));
 
+    function checkinCell(p){
+      if(suspenseMode) return '<span class="hidden-cell">🔒</span>';
+      if(p.checkin == null) return '<span class="pending-label">—</span>';
+      return `${p.checkin} kg<span class="checkin-date">${formatDate(p.checkinDate)}</span>`;
+    }
+
     finished.forEach((p, index) => {
       const tr = document.createElement('tr');
       const percentClass = p.percent >= 0 ? 'positive' : 'negative';
@@ -614,6 +660,7 @@
         <td class="rank">${rankCell}</td>
         <td>${nameCell}</td>
         <td>${p.start} kg</td>
+        <td>${checkinCell(p)}</td>
         <td>${finalCell}</td>
         <td>${percentCell}</td>
         <td><button class="delete-btn" data-name="${escapeHtml(p.name)}">X</button></td>
@@ -627,6 +674,7 @@
         <td class="rank">–</td>
         <td>${escapeHtml(p.name)}</td>
         <td>${p.start} kg</td>
+        <td>${checkinCell(p)}</td>
         <td class="pending-label">—</td>
         <td class="pending-label">Awaiting weigh-in</td>
         <td><button class="delete-btn" data-name="${escapeHtml(p.name)}">X</button></td>
@@ -634,7 +682,8 @@
       tbody.appendChild(tr);
     });
 
-    populateFinalSelect();
+    populateParticipantSelect('finalSelect', p => isFinished(p) ? `${p.name} — final logged` : `${p.name} — awaiting weigh-in`);
+    populateParticipantSelect('checkinSelect', p => p.checkin != null ? `${p.name} — last check-in ${formatDate(p.checkinDate)}` : `${p.name} — no check-in yet`);
     renderStats();
   }
 
@@ -645,8 +694,8 @@
     }
   });
 
-  function populateFinalSelect(){
-    const select = document.getElementById('finalSelect');
+  function populateParticipantSelect(selectId, labelFn){
+    const select = document.getElementById(selectId);
     const previousValue = select.value;
     select.innerHTML = '';
 
@@ -670,7 +719,7 @@
     sorted.forEach(p => {
       const opt = document.createElement('option');
       opt.value = p.name;
-      opt.textContent = isFinished(p) ? `${p.name} — final logged` : `${p.name} — awaiting weigh-in`;
+      opt.textContent = labelFn(p);
       select.appendChild(opt);
     });
 
@@ -741,6 +790,7 @@
 
   async function init(){
     renderFixedDates();
+    document.getElementById('checkinDate').value = new Date().toISOString().slice(0, 10);
     await loadSuspenseMode();
     await loadParticipants();
   }
